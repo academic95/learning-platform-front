@@ -1,8 +1,13 @@
-import { createRouter, createWebHistory, type RouteRecordRaw } from "vue-router";
+import {
+  createRouter,
+  createWebHistory,
+  type RouteRecordRaw,
+} from "vue-router";
 
 import CoursesView from "../views/CoursesView.vue";
 import MyCoursesView from "../views/MyCoursesView.vue";
 import AuthView from "../views/AuthView.vue";
+import CourseTopicsView from "../views/CourseTopicsView.vue";
 
 declare module "vue-router" {
   interface RouteMeta {
@@ -34,6 +39,12 @@ const routes: RouteRecordRaw[] = [
     path: "/my-courses",
     name: "my-courses",
     component: MyCoursesView,
+    meta: { requiresAuth: true },
+  },
+  {
+    path: "/courses/:id/topics",
+    name: "course-topics",
+    component: CourseTopicsView,
     meta: { requiresAuth: true },
   },
 ];

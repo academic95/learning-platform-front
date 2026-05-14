@@ -1,6 +1,8 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue';
+import type { AxiosError } from 'axios';
+import { onMounted, ref, shallowRef } from 'vue';
 import api from '../api/axios';
+import AppPagination from '../components/AppPagination.vue';
 
 type Course = {
   id: number;
@@ -12,17 +14,56 @@ type Course = {
   is_enrolled?: boolean;
 };
 
-const courses = ref<Course[]>([]);
-const loading = ref(false);
-const error = ref('');
+type PaginationMeta = {
+  current_page: number;
+  from: number | null;
+  last_page: number;
+  per_page: number;
+  to: number | null;
+  total: number;
+};
 
-const fetchCourses = async () => {
+type CoursesResponse = {
+  data: Course[];
+  meta?: PaginationMeta;
+};
+
+const courses = ref<Course[]>([]);
+const loading = shallowRef(false);
+const error = shallowRef('');
+const currentPage = shallowRef(1);
+const pagination = ref<PaginationMeta>({
+  current_page: 1,
+  from: null,
+  last_page: 1,
+  per_page: 0,
+  to: null,
+  total: 0,
+});
+
+const applyPagination = (meta: PaginationMeta | undefined) => {
+  pagination.value = meta ?? {
+    current_page: currentPage.value,
+    from: courses.value.length > 0 ? 1 : null,
+    last_page: 1,
+    per_page: courses.value.length,
+    to: courses.value.length > 0 ? courses.value.length : null,
+    total: courses.value.length,
+  };
+};
+
+const fetchCourses = async (page = currentPage.value) => {
   loading.value = true;
   error.value = '';
 
   try {
-    const response = await api.get('/courses');
+    const response = await api.get<CoursesResponse>('/courses', {
+      params: { page },
+    });
+
     courses.value = response.data.data;
+    currentPage.value = response.data.meta?.current_page ?? page;
+    applyPagination(response.data.meta);
   } catch {
     error.value = 'Не вдалося завантажити курси';
   } finally {
@@ -34,8 +75,10 @@ const enroll = async (course: Course) => {
   try {
     await api.post(`/courses/${course.id}/enroll`);
     course.is_enrolled = true;
-  } catch (err: any) {
-    if (err.response?.status === 409) {
+  } catch (err) {
+    const apiError = err as AxiosError;
+
+    if (apiError.response?.status === 409) {
       course.is_enrolled = true;
       return;
     }
@@ -44,12 +87,16 @@ const enroll = async (course: Course) => {
   }
 };
 
+const changePage = (page: number) => {
+  void fetchCourses(page);
+};
+
 onMounted(fetchCourses);
 </script>
 
 <template>
   <main class="page">
-    <h1>Каталог курсів</h1>
+    <h1 class="page-title">Каталог курсів</h1>
 
     <p v-if="loading">Завантаження...</p>
     <p v-if="error" class="error">{{ error }}</p>
@@ -57,7 +104,7 @@ onMounted(fetchCourses);
     <section class="grid">
       <article v-for="course in courses" :key="course.id" class="card">
         <div class="card-header">
-          <h2>{{ course.title }}</h2>
+          <h2 class="card-title">{{ course.title }}</h2>
 
           <span v-if="course.is_mandatory" class="badge">
             Обов'язковий
@@ -74,6 +121,7 @@ onMounted(fetchCourses);
         </div>
 
         <button
+          class="enroll-button"
           :disabled="course.is_enrolled"
           @click="enroll(course)"
         >
@@ -81,6 +129,16 @@ onMounted(fetchCourses);
         </button>
       </article>
     </section>
+
+    <AppPagination
+      :current-page="pagination.current_page"
+      :from="pagination.from"
+      :last-page="pagination.last_page"
+      :loading="loading"
+      :to="pagination.to"
+      :total="pagination.total"
+      @page-change="changePage"
+    />
   </main>
 </template>
 
@@ -89,7 +147,7 @@ onMounted(fetchCourses);
   padding: 32px;
 }
 
-h1 {
+.page-title {
   margin-bottom: 24px;
 }
 
@@ -114,7 +172,7 @@ h1 {
   align-items: flex-start;
 }
 
-h2 {
+.card-title {
   font-size: 20px;
   margin: 0;
 }
@@ -134,7 +192,7 @@ h2 {
   margin: 16px 0;
 }
 
-button {
+.enroll-button {
   padding: 10px 14px;
   border: none;
   border-radius: 8px;
@@ -143,7 +201,7 @@ button {
   cursor: pointer;
 }
 
-button:disabled {
+.enroll-button:disabled {
   background: #9ca3af;
   cursor: not-allowed;
 }

@@ -35,7 +35,7 @@ const logout = async () => {
 <template>
   <header class="header">
     <div class="brand">
-      <strong>Learning Platform</strong>
+      <strong>Навчальна платформа</strong>
     </div>
 
     <nav class="navigation">

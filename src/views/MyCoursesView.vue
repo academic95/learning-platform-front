@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue';
-import api from '../api/axios';
+import { onMounted, ref, shallowRef } from "vue";
+import api from "../api/axios";
+import AppPagination from "../components/AppPagination.vue";
 
 type MyCourse = {
   id: number;
@@ -11,22 +12,67 @@ type MyCourse = {
   completed_at: string | null;
 };
 
-const courses = ref<MyCourse[]>([]);
-const loading = ref(false);
-const error = ref('');
+type PaginationMeta = {
+  current_page: number;
+  from: number | null;
+  last_page: number;
+  per_page: number;
+  to: number | null;
+  total: number;
+};
 
-const fetchMyCourses = async () => {
+type MyCoursesResponse = {
+  data: MyCourse[];
+  meta?: PaginationMeta;
+};
+
+const courses = ref<MyCourse[]>([]);
+const loading = shallowRef(false);
+const error = shallowRef("");
+const currentPage = shallowRef(1);
+const pagination = ref<PaginationMeta>({
+  current_page: 1,
+  from: null,
+  last_page: 1,
+  per_page: 0,
+  to: null,
+  total: 0,
+});
+
+const formatDate = (date: string) => new Date(date).toLocaleDateString("uk-UA");
+
+const applyPagination = (meta: PaginationMeta | undefined) => {
+  pagination.value = meta ?? {
+    current_page: currentPage.value,
+    from: courses.value.length > 0 ? 1 : null,
+    last_page: 1,
+    per_page: courses.value.length,
+    to: courses.value.length > 0 ? courses.value.length : null,
+    total: courses.value.length,
+  };
+};
+
+const fetchMyCourses = async (page = currentPage.value) => {
   loading.value = true;
-  error.value = '';
+  error.value = "";
 
   try {
-    const response = await api.get('/users/me/courses');
+    const response = await api.get<MyCoursesResponse>("/users/me/courses", {
+      params: { page },
+    });
+
     courses.value = response.data.data;
+    currentPage.value = response.data.meta?.current_page ?? page;
+    applyPagination(response.data.meta);
   } catch {
-    error.value = 'Не вдалося завантажити мої курси';
+    error.value = "Не вдалося завантажити мої курси";
   } finally {
     loading.value = false;
   }
+};
+
+const changePage = (page: number) => {
+  void fetchMyCourses(page);
 };
 
 onMounted(fetchMyCourses);
@@ -34,7 +80,7 @@ onMounted(fetchMyCourses);
 
 <template>
   <main class="page">
-    <h1>Мої курси</h1>
+    <h1 class="page-title">Мої курси</h1>
 
     <p v-if="loading">Завантаження...</p>
     <p v-if="error" class="error">{{ error }}</p>
@@ -46,11 +92,9 @@ onMounted(fetchMyCourses);
     <section class="list">
       <article v-for="course in courses" :key="course.id" class="card">
         <div class="header">
-          <h2>{{ course.title }}</h2>
+          <h2 class="card-title">{{ course.title }}</h2>
 
-          <span v-if="course.is_mandatory" class="badge">
-            Обов'язковий
-          </span>
+          <span v-if="course.is_mandatory" class="badge"> Обов'язковий </span>
         </div>
 
         <p>Прогрес: {{ course.progress }}%</p>
@@ -63,20 +107,41 @@ onMounted(fetchMyCourses);
         </div>
 
         <p class="meta">
-          Записано: {{ new Date(course.enrolled_at).toLocaleDateString('uk-UA') }}
+          Записано: {{ formatDate(course.enrolled_at) }}
         </p>
 
         <p v-if="course.completed_at" class="completed">
-          Завершено: {{ new Date(course.completed_at).toLocaleDateString('uk-UA') }}
+          Завершено: {{ formatDate(course.completed_at) }}
         </p>
+
+        <RouterLink
+          class="topics-link"
+          :to="{ name: 'course-topics', params: { id: course.id } }"
+        >
+          Перейти до тем
+        </RouterLink>
       </article>
     </section>
+
+    <AppPagination
+      :current-page="pagination.current_page"
+      :from="pagination.from"
+      :last-page="pagination.last_page"
+      :loading="loading"
+      :to="pagination.to"
+      :total="pagination.total"
+      @page-change="changePage"
+    />
   </main>
 </template>
 
 <style scoped>
 .page {
   padding: 32px;
+}
+
+.page-title {
+  margin: 0 0 24px;
 }
 
 .list {
@@ -97,7 +162,7 @@ onMounted(fetchMyCourses);
   gap: 12px;
 }
 
-h2 {
+.card-title {
   margin: 0;
 }
 
@@ -127,6 +192,11 @@ h2 {
 
 .completed {
   color: #047857;
+}
+
+.topics-link {
+  color: #111827;
+  font-weight: 700;
 }
 
 .error {
