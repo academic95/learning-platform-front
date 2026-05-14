@@ -1,7 +1,15 @@
 <script setup lang="ts">
-import HelloWorld from './components/HelloWorld.vue'
+import { computed } from 'vue';
+import { useRoute } from 'vue-router';
+import AppHeader from './components/AppHeader.vue';
+
+const route = useRoute();
+
+const showHeader = computed(() => !route.meta.hideHeader);
 </script>
 
 <template>
-  <HelloWorld />
+  <AppHeader v-if="showHeader" />
+
+  <RouterView />
 </template>
